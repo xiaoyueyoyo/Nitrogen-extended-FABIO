@@ -9,7 +9,6 @@ library(tidyverse)
 library(data.table)
 library(readxl)
 library(dplyr)
-library(zoo)
 rm(list=ls()); gc()
 
 # Read CNB: FAO,Crop nutrient Budget(normalized)

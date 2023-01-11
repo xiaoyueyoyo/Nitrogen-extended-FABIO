@@ -1,0 +1,40 @@
+############################################################
+##             Derive Crop detailed NInput Data           ##
+############################################################
+
+
+## Initial setting
+library(Matrix)
+library(tidyverse)
+library(data.table)
+library(readxl)
+library(dplyr)
+library(zoo)
+rm(list=ls()); gc()
+
+# Read CNB: FAO,Crop nutrient Budget(normalized)
+# Data download link: https://www.fao.org/faostat/en/#data/ESB
+CNB <- read_csv("Nitrogen Extended FABIO/Nutrient_Budget_Data/Environment_Cropland_nutrient_budget_E_All_Data_(Normalized).csv")
+
+# Read QCL: FAO, Crop and Livestock Production(normalized)
+# Data download link: https://www.fao.org/faostat/en/#data/QCL
+QCL <- read_csv("Nitrogen Extended FABIO/QCL/QCL.csv")
+
+
+# Select Nitrogen Input data from the whole CNB dataset
+All <- CNB %>% 
+  filter(Element == "Cropland nitrogen" | Element == "Cropland nitrogen per unit area" |Element == "Cropland nitrogen use efficiency") %>% 
+  select(Year, Area, NInput = Value, NUnit = Unit, NInput_Source = Item, NClass = Element)
+  
+# Select Harvested Area Data from the whole QCL dataset
+AH <- QCL %>% 
+  filter(Element == "Area harvested") %>% 
+  mutate(Area_Harvested = Value, Area_Unit = Unit) %>% 
+  select(-c("Area Code (M49)","Element Code","Element","Year Code","Unit","Value","Flag"))
+
+
+# Merge Nitrogen Input data (All) from CNB with Harvested Area data (AH) from QCL
+mergAll <- merge(AH,All,by = c('Area', 'Year'), all.x = TRUE)
+write.csv(mergAll, "~/Nitrogen Extended FABIO/Results/NInput.csv")
+
+

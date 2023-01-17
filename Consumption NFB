@@ -1,0 +1,77 @@
+######################################
+##  Direct consumption N emission   ##
+######################################
+
+# Initial Setting 
+library(Matrix)
+library(tidyverse)
+library(data.table)
+library(readxl)
+library(dplyr)
+library(zoo)
+rm(list=ls()); gc()
+
+
+# Import FAO food balance (FB) sheet
+# Download link: https://www.fao.org/faostat/en/#data/FBS
+FB <- fread("~/Nitrogen Extended FABIO/Food Balance/FB.csv")
+
+# Select protein supply quantity from FAO FB sheet 
+protein <- FB %>% 
+  filter(Element == "Protein supply quantity (g/capita/day)") %>% 
+  mutate(protein = Value, proUnit = Unit,m49_code = `Area Code (M49)`,cpc_code = `Item Code (CPC)`) %>% 
+  select(-c("Area Code (M49)","Item Code (CPC)","Element Code", "Year Code", "Flag","Element","Value","Unit")) 
+
+# Select population from FAO FB sheet 
+population <- FB %>% 
+  filter(Element == "Total Population - Both sexes") %>% 
+  mutate(P = Value, PUnit = Unit) %>% 
+  select(-c("Area Code (M49)","Item Code (CPC)", "Element Code", "Year Code","Flag","Value","Unit","Item","Item Code","Element"))
+
+
+# Merge the two datasets
+merg <- merge(protein,population,by = c("Area Code","Area","Year"), all.x =TRUE)
+
+# Calculate consumption NFP by multiplying total protein supply quantity per year with nitrogen content in protein
+# Note that protein has 16% nitrogen. A year has 365 days. 
+NFP_consumption <- merg %>% 
+  mutate(N_emission = 0.16*P*protein*365/1000, NUnit = "tonnes") 
+write.csv(NFP_consumption,"~/Nitrogen Extended FABIO/Results/NFP_consumption_nowaste.csv")
+
+# The current dataset has not considered food waste.
+# Protein supply is protein available for supply, which is not equal to actual consumption. 
+# Require data on food waste/direct consumption 
+
+
+# First Trial: Use FAO food loss and waste information 
+FoodL <- fread("~/Nitrogen Extended FABIO/Food Balance/Food Waste_FAO.csv")
+
+# Select food waste at consumption stage
+food_waste <- FoodL %>% 
+  filter(activity == "Consumption, Retailing")
+# Low data quality with many missing data 
+
+# Consider food loss at all stages
+FoodL <- group_by(FoodL,country, year, commodity)
+TotalLoss <- summarize(FoodL,totalloss = sum(loss_percentage))
+FoodLoss <- FoodL %>% 
+  select(m49_code,country,cpc_code,commodity,year) %>% 
+  merge(TotalLoss, by = c("country","year","commodity"))
+
+write.csv(FoodLoss, "~/Nitrogen Extended FABIO/Results/FoodLoss.csv")
+
+
+# Compare food and region classifications between FAO food loss data and FAO protein supply data 
+Area <- as.tibble(unique(NFP_consumption$Area))
+country <- as.tibble(unique(FoodLoss$country))
+Item <- as.tibble(unique(NFP_consumption$Item))
+commodity <- as.tibble(unique(FoodLoss$commodity))
+# Issue: There exists difference in food and reigon classifications, food loss data must be harmonized with protein data. 
+
+
+
+
+# Nitrogen removal percentage in wastewater treatment plant located in different regions
+
+
+

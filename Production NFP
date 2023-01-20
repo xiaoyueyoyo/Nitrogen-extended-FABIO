@@ -1,0 +1,62 @@
+###########################################
+##           Production NFP              ##
+###########################################
+
+
+# Initial setting
+library(Matrix)
+library(tidyverse)
+library(data.table)
+library(readxl)
+library(dplyr)
+library(zoo)
+rm(list=ls()); gc()
+
+# Import FABIO items, CNBmatch file, NInput file/
+items <- fread("~/Nitrogen Extended FABIO/Data/items.csv")
+CNBmatch <- fread("~/Nitrogen Extended FABIO/Code/CNBmatch.csv")
+NInput <- fread("~/Nitrogen Extended FABIO/Results/NInput.csv")
+
+# Merge food classification for NInput and FABIO
+merg <-  merge(items,CNBmatch,by.x = c('item'), by.y = ('FABIO'))
+merg1 <- merge(NInput, merg, by = c('Item'))
+#group by area,year 
+merg1 <- merg1 %>% 
+  as_tibble() %>% 
+  filter(NClass == "Cropland nitrogen") %>% 
+  group_by(Area,Year) %>% 
+  arrange(Area,Year,item) 
+
+# summarise to calculate total harvested area, harvested area ratio and crop detailed production nitrogen
+Crop_NInput <- summarise(merg1, Area, Year, item ,Area_Harvested, TotalAH = sum(Area_Harvested), ratio = Area_Harvested/TotalAH, NInput_Source, CFN = ratio*NInput,NInput,NUnit)
+write.csv(Crop_NInput,"~/Nitrogen Extended FABIO/Results/Crop_NInput.csv")
+
+
+# The results can be compared with FUBC fertilizer use by crop 
+# "Manure applied to Soils""Atmospheric Deposition""Biological Fixation""Leaching""Volatilisation" are all distributed according to harvested area
+
+Crop_NInput <- fread("~/Nitrogen Extended FABIO/Results/Crop_NInput.csv")
+
+# Distribute emission factors to derive emission input 
+# Nwp <- 0.3*(N_fertilizer+N_manure)
+# NOx <- 0.1*N_fertilizer+0.2*N_manure
+# NO2 <- 0.01*(N_fertilizer+N_manure)
+
+
+# Calculate Production_NFP by multiplying emission factors 
+Production_NFP <- Crop_NInput %>% 
+  filter(NInput_Source == "Synthetic Fertilizers" | NInput_Source == "Manure Applied to Soils") %>% 
+  mutate(Nwp = 0.3*CFN, NOx = 0.1*CFN, NO2 = 0.01*CFN)
+  
+# Replace NOx emission factors for N_manure type 
+Production_NFP$NOx[Production_NFP$NInput_Source == "Manure Applied to Soils"] <- 0.2*Production_NFP$CFN
+
+# Group by Area, Year and item to summarize 
+Production_NFP <- Production_NFP %>% 
+  group_by(Area,Year,item) %>% 
+  summarize(Nwp = sum(Nwp), NOx = sum(NOx),NO2 = sum(NO2))
+  
+# Save Results
+write.csv(Production_NFP,"~/Nitrogen Extended FABIO/Results/Production_NFP_summary.csv")
+
+

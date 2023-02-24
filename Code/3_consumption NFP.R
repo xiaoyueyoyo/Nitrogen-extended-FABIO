@@ -1,18 +1,22 @@
-### Direct Nwp from household consumption ###
+###################################################################
+##         Direct N Leaching from household consumption          ##
+###################################################################
 
 
+# Initial setting 
 library(tidyverse)
 library(data.table)
 library(readxl)
 library(dplyr)
 # library(wbstats)
-
 rm(list=ls()); 
 gc()
 
+# Read Food Balance data
+FB <- fread("~/Nitrogen-extended-FABIO/Data/FB.csv")
 
-# Read protein and population data from FB
-FB <- fread("~/Nitrogen Extended FABIO/Food Balance/FB.csv")
+
+# Filter protein supply and population data from FB
 protein <- FB %>% 
   as_tibble() %>% 
   filter(Element == "Protein supply quantity (g/capita/day)") %>% 
@@ -23,85 +27,123 @@ population <- FB %>%
   select(-c("Area Code (M49)","Item Code (CPC)", "Element Code", "Year Code","Flag","Value","Unit","Item","Item Code","Element"))
 
 
-# Derive FB unique region and region code based on multiple variables
-FB_region  <-  unique(protein[c("Area","Area Code")])
-write.csv(FB_region, "~/FB_region.csv")
-FB_FABIO_regionmatch <- read_xlsx("~/Nitrogen Extended FABIO/Code/FB_FABIO_regionmatch.xlsx")
-
-# Derive FB unique item and item code 
-FB_item <- unique(protein[c("Item","Item Code")])
-write.csv(FB_item,"~/FB_item.csv")
-FB_FABIO_itemmatch <- read_xlsx("~/Nitrogen Extended FABIO/Code/FB_FABIO_itemmatch.xlsx")
+# Derive FB unique region and item 
+# FB_region  <-  unique(protein[c("Area","Area Code")])
+# FB_item <- unique(protein[c("Item","Item Code")])
+# write.csv(FB_item,"~/FB_item.csv")
+# write.csv(FB_region, "~/FB_region.csv")
 
 
-
-# Read protein and population data before 2010
-# FBold <- fread("~/Nitrogen Extended FABIO/Code/FBold.csv")
-# protein <- FBold %>% 
-#  as_tibble() %>% 
-#  filter(Element == "Protein supply quantity (g/capita/day)") %>% 
-#  filter(between(Year, 1986,2009)) 
- 
-# FB_region  <-  unique(protein[c("Area")])  # 数据过少没有意义
-
+# Read region match file and item match file to integrate FB and FABIO
+FB_FABIO_regionmatch <- read_xlsx("~/Nitrogen-extended-FABIO/Data/FB_FABIO_regionmatch.xlsx")
+FB_FABIO_itemmatch <- read_xlsx("~/Nitrogen-extended-FABIO/Data/FB_FABIO_itemmatch.xlsx")
 
 
 # Derive food Waste data
-
-
+# Limited data availability 
 
 
 # Derive NRemoval data
+# Limited data availability 
 
 
-
-
-
-# Merge dataset 
+# Merge dataset and derive household consumption NFP
 merg <- merge(protein,population,by = c("Area Code","Area","Year"), all.x =TRUE)
-
-NFP_consumption <- merg %>% 
+# Nitrogen accounts for 16% in protein
+nratio <- 0.16
+NFP_hh <- merg %>% 
   merge(FB_FABIO_regionmatch,by = c('Area Code')) %>% 
   merge(FB_FABIO_itemmatch, by = c('Item Code')) %>% 
   filter(is.na(item_code) == FALSE) %>% 
   filter(is.na(area_code) == FALSE) %>% 
-  mutate(Nremoval = 0, Waste = 0, Nwp_c = 0.16*P*Value*(1-Waste)*(1-Nremoval)*365/1000, NUnit = "tonnes") %>% 
-  select(area_code, Area = Area.y, Year, item_code, Item = Item.y,  protein = Value, population = P, Waste, Nremoval, Nwp_c,NUnit)
+  mutate(Nremoval = 0, Waste = 0, Nwp_hh = nratio*1000*P*Value*(1-Waste)*(1-Nremoval)*365/10e6, NUnit = "tonnes") %>% 
+  select(area_code, area = Area.y, Year, item_code, item = Item.y,  protein = Value, population = P, Waste, Nremoval, Nwp_hh, NUnit)
 # Modify negative value
-NFP_consumption$Nwp_c[NFP_consumption$protein<0]=0
+NFP_hh$Nwp_hh[NFP_hh$protein<0]=0
 
 
-# Extrapolate data before 2010
+# Extrapolate protein supply data for missing years 
+area_list <- unique(NFP_hh[c("area_code","area")])
+rd <- nrow(area_list)
+df <- data.frame(area_code = rep(area_list$area_code,each = 35), area = rep(area_list$area,each = 35), Year = rep(seq(1986,2020,1),rd))
+# aggregate protein data for each region each year 
+aggprotein <- NFP_hh %>% 
+  group_by(area,Year) %>% 
+  summarise(area_code, area, Year, pro = sum(protein),population = population*1000) %>% 
+  merge(df, by=c('area_code','area','Year'),all.y = TRUE) %>% 
+  distinct()
 
-x <- data.frame(area_code = rep(unique(NFP_consumption$area_code),each = 35), Year = rep(seq(1986,2020,1),177))
-aggprotein <- NFP_consumption %>% 
-  group_by(Area,Year) %>% 
-  summarise(area_code, Area, Year, pro = sum(protein)) %>% 
-  merge(x, by=c('area_code','Year'),all.y = TRUE) %>% 
-  distinct
+# t <- aggprotein %>% 
+#  filter(area_code == 276)
+# Create an extrapolation function based on recurring averaged difference 
 
-extrapolate <- function(fill) {
-  fit <- lm(pro~Year,fill)
-  na <- fill[is.na(fill$pro), "Year", drop = FALSE] 
-  newpro <- predict(fit,newdata=na)
-  na <- cbind(na,pro=newpro)
-  fill$pro[fill$Year %in% c(1986:2009,2020)] = na$pro  
-  return(fill)
+# Issue solved: Controlled decimal and solve negative values 
+extrapolate <- function(t) {
+  # replace na values in t$pro as 0
+  t$pro[is.na(t$pro)] <-  0
+  # derive difference sequence for t$pro using diff()
+  difft <-  diff(t$pro)
+   # get subset of nonzero values 
+  x = difft[difft!=0] 
+   # get subset from subset 
+  y = x[2:(length(x)-1)]
+  a = length(y)%/%2 
+  forward <- round(mean(y[1:(a+1)]),2) # average of first half diffs
+  backward <- round(mean(y[(a+1):length(y)]),2)  # average of second had diffs
+  # Locate the position of non-zero values
+  indx <- which(t$pro!=0)
+  # Fill the previous prediction; fill the later prediction
+  pre <- seq(t$pro[indx[1]]-forward,by = -forward, length.out = indx[1]-1)
+  pro <- seq(t$pro[indx[length(indx)]]+backward,by = backward, length.out = 35-indx[length(indx)])
+  t$pro[t$Year %in% seq(1986,by=1,length.out =indx[1]-1)] = rev(pre) 
+  t$pro[t$Year %in% t$Year[(tail(indx,1)+1):35]]= pro
+  return (t)
 }
 
-#preprotein <- data.frame()
-#for (i in aggprotein$area_code){
-#  fill <-  filter(aggprotein,area_code == i) 
-#  extrapolate(fill) 
-#  fill <-  rbind(preprotein,fill)
-#}
+
+# Note: stat functions like mean(x, na.rm = TRUE) has option of na.rm = TRUE to exclude NA from calculation
+
+
+# Create an extrapololation function based on linear modelling
+# extrapolate <- function(fill) {
+#  fit <- lm(pro~Year,fill)
+#  na <- fill[is.na(fill$pro), "Year", drop = FALSE] 
+#  newpro <- predict(fit,newdata=na)
+#  na <- cbind(na,pro=newpro)
+# fill$pro[fill$Year %in% c(1986:2009,2020)] = na$pro  
+#  return(fill)
+# }
+
 
 # Split the long data based on area code, return a list of tibbles
 data_list <- aggprotein %>%
    group_split(area_code)
 # data_list <- split(aggprotein, f = aggprotein$area_code)   
 newdata <- sapply(data_list,extrapolate)
-as.data.frame(newdata)
+
+# convert matrix of lists into dataframe
+x = data.frame()
+reform <- function(df) {
+  df <- asplit(df,2)
+  for (i in 1:dim(df)){
+  a <- df[[i]]
+  b <-  as.data.frame(do.call(cbind, a))
+  x <- rbind(x,b)
+  }
+return(x)
+}
+predict <- reform(newdata)
+
+
+
+# Distribute nitrogen according to crop harvested area
+
+
+# Derive full year range household consumption N emission
+
+
+
+
 
 
 
@@ -109,17 +151,16 @@ as.data.frame(newdata)
 write.csv(NFP_consumption,"~/Nitrogen Extended FABIO/Results/NFP_consumption.csv")
 
 
-# 目前问题
-# 1. FAO蛋白质供应数据没有2010年之前的（之间找Martin和Stefan问）。原来的数据就是不全。
-# 2. 没有food waste信息。没关系。
-# 3. 没有nitrogen removal信息。没关系。
 
+# Issues:
+# 1. Very limited protein supply data before 2010 from FAPSTAT.
+# 2. Limited food waste data
+# 3. Limited nitrogen removal data 
 
-# Consumption footprint重要性
-# 可以区分一国的氮污染主要来源：满足自身消费的生产，满足他国消费的生产，国民的直接消费
-# 可以分析一国消费的氮污染影响：国民的消费对本国造成的污染，国民的消费对他国造成的污染
+# Significance of Consumption footprint
+# 1. Distinguish between direct emission from consumption and production nitrogen footprint
+# 2. Analyse the impact of domestic food consumption preference on local nitrogen pollution
 
-# 没有必要考虑food waste，10年之前，以及nitrogen removal了。因为主要是不同种类农产品消费趋势的比较，绝对值不存在意义。
 
 
 

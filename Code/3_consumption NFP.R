@@ -13,7 +13,7 @@ rm(list=ls());
 gc()
 
 # Read Food Balance data
-FB <- fread("~/Nitrogen-extended-FABIO/Data/FB.csv")
+FB <- fread("~/nitrogen_fabio/Data/FB.csv")
 
 
 # Filter protein supply and population data from FB
@@ -35,8 +35,8 @@ population <- FB %>%
 
 
 # Read region match file and item match file to integrate FB and FABIO
-FB_FABIO_regionmatch <- read_xlsx("~/Nitrogen-extended-FABIO/Data/FB_FABIO_regionmatch.xlsx")
-FB_FABIO_itemmatch <- read_xlsx("~/Nitrogen-extended-FABIO/Data/FB_FABIO_itemmatch.xlsx")
+FB_FABIO_regionmatch <- read_xlsx("~/nitrogen_fabio/Data/FB_FABIO_regionmatch.xlsx")
+FB_FABIO_itemmatch <- read_xlsx("~/nitrogen_fabio/Data/FB_FABIO_itemmatch.xlsx")
 
 
 # Derive food Waste data
@@ -139,6 +139,9 @@ predict <- reform(newdata)
 # Distribute nitrogen according to crop harvested area
 
 
+# Merge with population data
+
+
 # Derive full year range household consumption N emission
 
 
@@ -148,7 +151,7 @@ predict <- reform(newdata)
 
 
 # Save results
-write.csv(NFP_consumption,"~/Nitrogen Extended FABIO/Results/NFP_consumption.csv")
+# write.csv(NFP_consumption,"~/Nitrogen Extended FABIO/Results/NFP_consumption.csv")
 
 
 

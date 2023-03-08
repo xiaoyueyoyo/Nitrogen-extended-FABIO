@@ -1,0 +1,133 @@
+---
+title: "Description of Data Analysis"
+author: "Yue"
+date: "2023/3/8"
+output: pdf_document 
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(dplyr)
+library(knitr)    # For knitting document and include_graphics function
+library(ggplot2)  # For plotting
+library(png)   
+library(data.table)
+```
+
+
+# Description of Data Analysis
+
+We are currently at the stage of **Visualization of Results and Covariance Analysis**. The following content introduces the data we have now and the expected presentation ways. This is an important step before we reach the final discussion. We expect to reveal some interesting story lines from the data visualization and covariance analysis. 
+
+## Data Description
+
+After data collection, cleaning and calculation of nitrogen footprint, we have 
+obtained four main datasets: 
+1. `FPcontinent` that shows the total nitrogen footprints (sum of Leaching and 
+Volatilization) of continents and world total from 1986 to 2020. 
+
+```{r FPcontinent}
+FPcontinent <- fread("~/nitrogen_fabio/Results/FPcontinent_summary_IPCC.csv")
+head(FPcontinent,10)
+```
+where `Leaching` is nitrogen emissions to the water bodies (ammonia), `Volatilization` is nitrogen emissions to the air (nitrate, NOx, nitrous oxides),`TN` is the total nitrogen missions. The continent abbreviations are: East Asia and Pacific (EAC), 
+Europe and Central Asia (ECA), Latin America & the Caribbean (LAC), Middle East and North Africa (MENA), North America, South Asia, Sub-Saharan Africa (SSA), RoW (rest 
+of world). 
+
+2. `FPcountry` that shows nitrogen emission summary of some selected countries of interest, which are China(CHN),USA,Brazil(BRA),Australia(AUS),India(IND),Germany(DEU),South Africa(ZAF),United Arab Emirate(ARE).
+
+```{r FPcountry}
+FPcountry <- fread("~/nitrogen_fabio/Results/FPcountry_summary_IPCC.csv")
+head(FPcountry,8)
+```
+
+3. `Nexchange` that shows the nitrogen net importing countries (which means they import foreign agri-food products and cause more nitrogen emissions abroad than the domestic nitrogen pollution they bear from exporting) and net exporting countries (vice versa). 
+
+```{r Nexchange}
+Nexchange <- fread("~/nitrogen_fabio/Results/Nexchange_summary.csv")
+head(Nexchange,20)
+```
+where positive `TNflow` corresponds to net nitrogen importing countries, and negative `TNflow` indicates net nitrogen exporting countries. The data set only includes 10 top net importing and 10 top net exporting countries for each year. 
+
+4. `food_emission` that shows the total nitrogen embedded in the food trading.
+
+```{r food_emission}
+food_emission <- readRDS("~/nitrogen_fabio/Results/food_emission_summary.rds")
+head(food_emission,10)
+```
+where `source_iso` indicates the food producing country, `final_item` indicates the food item, `final` is the final food consumption country. 
+
+We also collects nitrogen utilization efficiency (`NUE`) from FAO and economic data including gdppc (gdp per capita), p10 (income share of top10 wealthy people) and commodity prices (energy, food,fertilizers, oil etc.). The following graph is a glimpse of these economic data (`world_eco`,`country_eco`). 
+```{r econdata}
+world_eco <- fread("~/nitrogen_fabio/Data/wrdecon.csv")
+head(world_eco,10)
+```
+
+## Expected Plots and Analysis 
+
+The initial research questions related to these data sets are as follows.
+
+1. Related to `FPcontinent`, `FPcountry`, `world_eco`,`country_eco`,`NUE`:
+* How does the world and continent nitrogen footprint `TN` **evolve** in 35 years?
+* The **comparison** of nitrogen emissions per capita between selected countries and the world average.
+* How does world nitrogen footprint **covariate** with `NUE` and economic variables such as `gdppc` and `p10`.
+
+Please refer to Fig 1 and Fig 2 to see expected results. 
+
+```{r evolution_graph, fig.cap="Evolution of PUE"}
+img1_path <- "~/nitrogen_fabio/graph/evolution_graph.png"
+img1 <- readPNG(img1_path, native = TRUE, info = TRUE)
+#attr(img1, "info")
+include_graphics(img1_path)
+```
+
+```{r covariate_graph,out.width="75%", fig.cap="Covariance between PUE and GDP"}
+img2_path <- "~/nitrogen_fabio/graph/covariate_graph.png"
+img2 <- readPNG(img2_path, native = TRUE, info = TRUE)
+include_graphics(img2_path)
+```
+
+
+2. Related to `Nexchange`
+* What is the **general relationship** between net exporting countries and net importing countries? Is there developing-developed or emerging-developed relationship?
+* How does the **relationship change** over the 35 years?
+
+Please refer to Fig 3 to see expected result.
+
+```{r exchange_graph,fig.cap="Nitrogen exchange country pairs"}
+img3_path <- "~/nitrogen_fabio/graph/exchange.png"
+img3 <- readPNG(img3_path, native = TRUE, info = TRUE)
+include_graphics(img3_path)
+```
+
+3. Related to `food_emission` 
+* How does nitrogen emissions **vary** among food groups?
+* The **relationship** between food producing countries and food consuming countries.
+* How does nitrogen embedded in food consumption **evolve** over 35 year?
+* Is there **covariance** between nitrogen emissions of certain food groups?
+
+Please refer to Fig 4 to see expected result.
+
+```{r food_graph, fig.cap="Nitrogen emissions embedded in food"}
+img4_path <- "~/nitrogen_fabio/graph/food.png"
+img4 <- readPNG(img4_path, native = TRUE, info = TRUE)
+include_graphics(img4_path)
+```
+
+
+## Plan and Schedule
+
+The graphs are important for digging into the interesting pattern of global nitrogen emissions over the 35 years. Initial visualization would help us understand the research questions so we could ask more detailed, specific and interesting questions.
+
+It is expected to finish the initial plotting in one week (before 2023-3-15).
+
+## Resources
+
+* Github link: https://github.com/xiaoyueyoyo/Nitrogen-extended-FABIO
+* Code: 5_Analysis.R
+* Important References:
+  1. Guo, M. et al. (2017) ‘How China’s nitrogen footprint of food has changed from 1961 to 2010’, Environmental Research Letters, 12(10), p. 104006. Available at: https://doi.org/10.1088/1748-9326/aa81d9.
+  2. Oita, A. et al. (2016) ‘Substantial nitrogen pollution embedded in international trade’, Nature Geoscience, 9(2), pp. 111–115. Available at: https://doi.org/10.1038/ngeo2635.
+  3. Zou, T., Zhang, X. and Davidson, E.A. (2022) ‘Global trends of cropland phosphorus use and sustainability challenges’, Nature, 611(7934), pp. 81–87. Available at: https://doi.org/10.1038/s41586-022-05220-z.
+
